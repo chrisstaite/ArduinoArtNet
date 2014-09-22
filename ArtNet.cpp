@@ -88,7 +88,7 @@ static char ArtNetMagic[] = "Art-Net";
 
 /* Implementation */
 
-ArtNet::ArtNet(byte *ip, byte *mac, byte dhcp, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(byte, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes)
+ArtNet::ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(byte, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes)
 {
     unsigned char i;
     unsigned char v;
@@ -101,9 +101,7 @@ ArtNet::ArtNet(byte *ip, byte *mac, byte dhcp, byte eepromaddress, byte *buffer,
     this->serverIP[1] = 255;
     this->serverIP[2] = 255;
     this->serverIP[3] = 255;
-    this->ip = ip;
     this->mac = mac;
-    this->dhcp = dhcp;
     this->eepromaddress = eepromaddress;
     
     this->buffer = buffer;
@@ -149,6 +147,14 @@ ArtNet::ArtNet(byte *ip, byte *mac, byte dhcp, byte eepromaddress, byte *buffer,
             EEPROM.write(eepromaddress + 1 + 18 + i, 0);
         }
     }
+}
+
+void ArtNet::Configure(byte dhcp, byte* ip)
+{
+    unsigned char i;
+    
+    this->ip = ip;
+    this->dhcp = dhcp;
     
     if (EEPROM.read(eepromaddress + 1 + 18 + 64 + 1) == 1) {
         // Reboot due to IP change
@@ -156,10 +162,10 @@ ArtNet::ArtNet(byte *ip, byte *mac, byte dhcp, byte eepromaddress, byte *buffer,
         byte sendIp[4];
         word sendPort;
         for (i = 0; i < 4; ++i) {
-            sendIp[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + universes + universes + universes + i);
+            sendIp[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + this->Universes * 3 + i);
         }
         for (i = 0; i < 2; ++i) {
-            ((byte*)&sendPort)[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + universes + universes + universes + 4 + i);
+            ((byte*)&sendPort)[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + this->Universes * 3 + 4 + i);
         }
     	this->sendIPProgReply(sendIp, sendPort);
     } else {

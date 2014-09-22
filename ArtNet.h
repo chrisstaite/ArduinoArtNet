@@ -89,7 +89,8 @@ class ArtNet
     unsigned char ArtNetSubnet;
 
   public:
-    ArtNet(byte *ip, byte *mac, byte dhcp, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(byte, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes);
+    ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(byte, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes);
+    void Configure(byte dhcp, byte *ip);
     void ProcessPacket(byte ip[4], word port, const char *data, word len);
     void SendPoll(unsigned char force);
     void GetLongName(char *longName);
