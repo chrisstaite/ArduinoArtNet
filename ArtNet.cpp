@@ -88,7 +88,7 @@ static char ArtNetMagic[] = "Art-Net";
 
 /* Implementation */
 
-ArtNet::ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(byte, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes)
+ArtNet::ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(size_t, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes)
 {
     unsigned char i;
     unsigned char v;
@@ -360,7 +360,7 @@ void ArtNet::processInput(byte ip[4], word port, const char *data, word len)
 
 void ArtNet::sendIPProgReply(byte ip[4], word port)
 {
-    unsigned char length = 0;
+    size_t length = 0;
     unsigned short t16;
 
     // Magic
@@ -402,7 +402,7 @@ void ArtNet::sendIPProgReply(byte ip[4], word port)
     length += 7;
 
     // Transmit ArtNetIpProgReply
-    this->sendFunc(length, UDP_PORT_ARTNET, ip, port);
+    this->sendFunc(length, UDP_PORT_ARTNET_REPLY, ip, port);
 }
 
 void ArtNet::processIPProg(byte ip[4], word port, const char *data, word len)
@@ -579,7 +579,7 @@ void ArtNet::ProcessPacket(byte ip[4], word port, const char *data, word len)
 void ArtNet::SendPoll(unsigned char force)
 {
     byte *destIp;
-    byte length = 0;
+    size_t length = 0;
     unsigned int t16;
 
 	if (!force && !(this->ArtNetDiagnosticStatus & ARTNET_DIAGNOSTIC_ALWAYS)) {
@@ -656,7 +656,7 @@ void ArtNet::SendPoll(unsigned char force)
     
     // Report
     {
-        snprintf_P((char*)&this->buffer[length], 64, PSTR("#%x %d %s"), this->ArtNetStatus, this->ArtNetCounter, this->ArtNetStatusString);
+        snprintf((char*)&this->buffer[length], 64, "#%x %d %s", this->ArtNetStatus, this->ArtNetCounter, this->ArtNetStatusString);
         length += 64;
     }
     
@@ -719,7 +719,7 @@ void ArtNet::SendPoll(unsigned char force)
     length += 26;
 
     // Transmit ArtNetPollReply
-    this->sendFunc(length, UDP_PORT_ARTNET, destIp, UDP_PORT_ARTNET);
+    this->sendFunc(length, UDP_PORT_ARTNET, destIp, UDP_PORT_ARTNET_REPLY);
 
     // Reset status
     this->ArtNetStatus = ARTNET_STATUS_POWER_OK;

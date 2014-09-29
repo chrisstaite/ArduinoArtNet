@@ -29,6 +29,8 @@
 
 // Port to listen on
 #define UDP_PORT_ARTNET       6454  /* (0x1936) */
+// Port to reply on
+#define UDP_PORT_ARTNET_REPLY (UDP_PORT_ARTNET + 1)
 
 typedef enum ArtNetPortTypeTag {
 	ARTNET_IN,
@@ -70,7 +72,7 @@ class ArtNet
     byte serverIP[4];
     byte *buffer;
     word buflen;
-    void (*sendFunc)(byte length, word sport, byte *dip, word dport);
+    void (*sendFunc)(size_t length, word sport, byte *dip, word dport);
     void (*callback)(unsigned short, const char *, unsigned short);
     void (*setIP)(IPConfiguration, const char*, const char*);
     unsigned char ArtNetDiagnosticPriority;
@@ -89,7 +91,7 @@ class ArtNet
     unsigned char ArtNetSubnet;
 
   public:
-    ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(byte, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes);
+    ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(size_t, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes);
     void Configure(byte dhcp, byte *ip);
     void ProcessPacket(byte ip[4], word port, const char *data, word len);
     void SendPoll(unsigned char force);
