@@ -1,22 +1,23 @@
 
+#include <Serial.h>
 #include <EtherCard.h>
 #include <EEPROM.h>
 #include <ArtNet.h>
-#include <FastSPI_LED.h>
+#include <FastLED.h>
 
 #define DEFAULT_NUM_LEDS 128
 #define DEFAULT_START_ADDRESS 0
+#define PORTS 1 // Number of ports to use
+#define CHIPSET TM1809
+#define COLOUR_ORDER RGB
 
 #define DATA_PIN A5 
 
-struct CRGB { unsigned char r; unsigned char g; unsigned char b; };
-struct CRGB *leds;
+CRGB *leds;
 
 // Set a different MAC address for each...
 static byte mymac[] = { 0x74, 0x69, 0x69, 0x2D, 0x30, 0x32 };
 byte Ethernet::buffer[600]; // tcp/ip send and receive buffer
-
-ArtNet *artnet;
 
 struct Config {
     IPConfiguration iptype;
@@ -26,6 +27,8 @@ struct Config {
     unsigned short startAddress;
     byte valid;
 } config;
+
+ArtNet artnet(mymac, sizeof(config) + 1, Ethernet::buffer + UDP_DATA_P, sizeof(Ethernet::buffer) - UDP_DATA_P, setIP, artSend, callback, PORTS);
 
 // Calling 0 breaks the processor causing it to soft reset
 void(* resetFunc) (void) = 0; 
@@ -61,7 +64,7 @@ static void setIP(IPConfiguration iptype, const char *ip, const char *subnet)
   resetFunc();
 }
 
-static void artSend(byte length, word sport, byte *dip, word dport)
+static void artSend(size_t length, word sport, byte *dip, word dport)
 {
   ether.sendUdp((char*)Ethernet::buffer + UDP_DATA_P, length, sport, dip, dport);
 }
@@ -84,7 +87,7 @@ static void callback(unsigned short port, const char *buffer, unsigned short len
 }
 
 static void artnetPacket(word port, byte ip[4], const char *data, word len) {
-  artnet->ProcessPacket(ip, port, data, len);
+  artnet.ProcessPacket(ip, port, data, len);
 }
 
 void setup() {
@@ -97,18 +100,14 @@ void setup() {
   
   // Setup LEDS
   Serial.println(F("Configuring LEDs"));
-  FastSPI_LED.setLeds(config.connectedLEDs);
-  FastSPI_LED.setChipset(CFastSPI_LED::SPI_TM1809);
-  FastSPI_LED.setPin(DATA_PIN);
+  leds = new CRGB[config.connectedLEDs];
+  FastLED.addLeds<CHIPSET, DATA_PIN, COLOUR_ORDER>(leds, config.connectedLEDs);
   
   Serial.println(F("Initialising LEDs"));
-  FastSPI_LED.init();
-  FastSPI_LED.start();
-  leds = (struct CRGB*)FastSPI_LED.getRGBData();
   
   Serial.println(F("Clearing LEDs"));
-  memset(leds, 0, config.connectedLEDs * 3);
-  FastSPI_LED.show();
+  memset(leds, 0, sizeof(CRGB) * config.connectedLEDs);
+  FastLED.show();
   
   // Startup ethernet
   Serial.println(F("Initialising ENC28J60"));
@@ -146,7 +145,7 @@ void setup() {
   }
   
   Serial.println(F("Configuring ArtNet"));
-  artnet = new ArtNet(ether.myip, mymac, config.iptype == DHCP, sizeof(config) + 1, Ethernet::buffer + UDP_DATA_P, sizeof(Ethernet::buffer) - UDP_DATA_P, setIP, artSend, callback, 1);
+  artnet.Configure(config.iptype == DHCP, ether.myip);
   
   // Register listener
   Serial.println(F("Listening on ArtNet"));
@@ -244,8 +243,8 @@ char ledPage[] PROGMEM =
 
 void sendHomePage() {
   unsigned short len = sprintf_P((char*)ether.tcpOffset(), statusPage,
-      artnet->GetPacketCount(),
-      artnet->GetFailCount());
+      artnet.GetPacketCount(),
+      artnet.GetFailCount());
   ether.httpServerReply(len);
 }
 
@@ -262,13 +261,13 @@ void sendIPPage() {
 void sendArtNetPage() {
   char shortName[19] = {0};
   char longName[65] = {0};
-  artnet->GetShortName(shortName);
-  artnet->GetLongName(longName);
+  artnet.GetShortName(shortName);
+  artnet.GetLongName(longName);
   unsigned short len = sprintf_P((char*)ether.tcpOffset(), artnetPage,
       shortName,
       longName,
-      artnet->GetSubnet(),
-      artnet->GetInputUniverse(0));
+      artnet.GetSubnet(),
+      artnet.GetInputUniverse(0));
   ether.httpServerReply(len);
 }
 
@@ -307,7 +306,7 @@ static void setShortName(const char *data, const char *key) {
   char shortName[19];
   if (ether.findKeyVal(data, shortName, sizeof(shortName), key) > 0) {
     ether.urlDecode(shortName);
-    artnet->SetShortName(shortName);
+    artnet.SetShortName(shortName);
   }
 }
 
@@ -315,7 +314,7 @@ static void setLongName(const char *data, const char *key) {
   char longName[65];
   if (ether.findKeyVal(data, longName, sizeof(longName), key) > 0) {
     ether.urlDecode(longName);
-    artnet->SetLongName(longName);
+    artnet.SetLongName(longName);
   }
 }
 
@@ -336,8 +335,8 @@ void loop() {
       sendLEDPage();
     } else if (strncmp("GET /artnet?", (const char *)(Ethernet::buffer + pos), 12) == 0) {
       // Save settings
-      artnet->SetInputUniverse(0, getIntArg((const char *)(Ethernet::buffer + pos + 11), "universe", artnet->GetInputUniverse(0)));
-      artnet->SetSubnet(getIntArg((const char *)(Ethernet::buffer + pos + 11), "subnet", artnet->GetSubnet()));
+      artnet.SetInputUniverse(0, getIntArg((const char *)(Ethernet::buffer + pos + 11), "universe", artnet.GetInputUniverse(0)));
+      artnet.SetSubnet(getIntArg((const char *)(Ethernet::buffer + pos + 11), "subnet", artnet.GetSubnet()));
       setShortName((const char *)(Ethernet::buffer + pos + 11), "shortname");
       setLongName((const char *)(Ethernet::buffer + pos + 11), "longname");
       

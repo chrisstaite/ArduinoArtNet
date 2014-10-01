@@ -88,8 +88,12 @@ static char ArtNetMagic[] = "Art-Net";
 
 /* Implementation */
 
-ArtNet::ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(size_t, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes)
+ArtNet::ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(size_t, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char ports)
 {
+    if (ports > MAX_PORTS) {
+        ports = MAX_PORTS;
+    }
+    
     unsigned char i;
     unsigned char v;
     
@@ -109,7 +113,6 @@ ArtNet::ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*
     this->sendFunc = sendFunc;
     this->callback = callback;
     this->setIP = setIP;
-    this->Universes = universes;
     
     this->ArtNetDiagnosticPriority = ARTNET_DIAGNOSTIC_CRITICAL;
     this->ArtNetDiagnosticStatus = ARTNET_DIAGNOSTIC_BROADCAST | ARTNET_DIAGNOSTIC_SEND | ARTNET_DIAGNOSTIC_ALWAYS;
@@ -124,18 +127,21 @@ ArtNet::ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*
     this->ArtNetInCounter = 0;
     this->ArtNetFailCounter = 0;
     
-    this->ArtNetInputPortStatus = (unsigned char*)calloc(1, universes);
-    this->ArtNetOutputPortStatus = (unsigned char*)calloc(1, universes);
-    this->ArtNetInputUniverse = (unsigned char*)calloc(1, universes);
-    this->ArtNetOutputUniverse = (unsigned char*)calloc(1, universes);
-    this->ArtNetInputEnable = (ArtNetPortType*)calloc(sizeof(ArtNetPortType), universes);
-    for (i = 0; i < universes; ++i) {
-        if (v != 253) EEPROM.write(eepromaddress + 1 + 18 + 64 + 2 + i, 0);
+    memset(this->ArtNetInputPortStatus, 0, MAX_PORTS);
+    memset(this->ArtNetOutputPortStatus, 0, MAX_PORTS);
+    for (i = 0; i < MAX_PORTS; ++i) {
+        if (v != 253) EEPROM.write(eepromaddress + 1 + 18 + 64 + 2 + i, i);
         this->ArtNetInputUniverse[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + i);
-        if (v != 253) EEPROM.write(eepromaddress + 1 + 18 + 64 + 2 + universes + i, 0);
-        this->ArtNetOutputUniverse[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + universes + i);
-        if (v != 253) EEPROM.write(eepromaddress + 1 + 18 + 64 + 2 + universes + universes + i, ARTNET_IN);
-        this->ArtNetInputEnable[i] = (ArtNetPortType)EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + universes + universes + i);
+        if (v != 253) EEPROM.write(eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS + i, i);
+        this->ArtNetOutputUniverse[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS + i);
+        if (v != 253) {
+            if (i < ports) {
+                EEPROM.write(eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS + MAX_PORTS + i, ARTNET_IN);
+            } else {
+                EEPROM.write(eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS + MAX_PORTS + i, ARTNET_OFF);
+            }
+        }
+        this->ArtNetInputEnable[i] = (ArtNetPortType)EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS + MAX_PORTS + i);
     }
     
     /* Clear names if uninitialised */
@@ -147,6 +153,18 @@ ArtNet::ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*
             EEPROM.write(eepromaddress + 1 + 18 + i, 0);
         }
     }
+}
+
+ArtNetPortType ArtNet::PortType(unsigned char port)
+{
+    if (port > MAX_PORTS) return ARTNET_OFF;
+    return ArtNetInputEnable[port];
+}
+
+void ArtNet::PortType(unsigned char port, ArtNetPortType type)
+{
+    if (port > MAX_PORTS) return;
+    ArtNetInputEnable[port] = type;
 }
 
 void ArtNet::Configure(byte dhcp, byte* ip)
@@ -162,10 +180,10 @@ void ArtNet::Configure(byte dhcp, byte* ip)
         byte sendIp[4];
         word sendPort;
         for (i = 0; i < 4; ++i) {
-            sendIp[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + this->Universes * 3 + i);
+            sendIp[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS * 3 + i);
         }
         for (i = 0; i < 2; ++i) {
-            ((byte*)&sendPort)[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + this->Universes * 3 + 4 + i);
+            ((byte*)&sendPort)[i] = EEPROM.read(eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS * 3 + 4 + i);
         }
     	this->sendIPProgReply(sendIp, sendPort);
     } else {
@@ -216,13 +234,13 @@ void ArtNet::SetLongName(char *longName)
 
 unsigned char ArtNet::GetInputUniverse(unsigned char port)
 {
-    if (port >= this->Universes) return 0;
+    if (port >= MAX_PORTS) return 0;
     return this->ArtNetInputUniverse[port];
 }
 
 void ArtNet::SetInputUniverse(unsigned char port, unsigned char universe)
 {
-    if (port >= this->Universes) return;
+    if (port >= MAX_PORTS) return;
     this->ArtNetInputUniverse[port] = universe;
     EEPROM.write(this->eepromaddress + 1 + 18 + 64 + 2 + port, universe);
 }
@@ -285,7 +303,7 @@ void ArtNet::processAddress(byte ip[4], word port, const char *data, word len)
     }
     
     // Set input universes
-    for (i = 0; i < this->Universes; i++) {
+    for (i = 0; i < MAX_PORTS; i++) {
 		if (data[64 + 19 + 1 + i] != 0x7f && (data[64 + 19 + 1 + i] & (1 << 7))) {
 			unsigned char t;
 			// Only set if bit 7 is high
@@ -298,22 +316,22 @@ void ArtNet::processAddress(byte ip[4], word port, const char *data, word len)
     }
     
     // Set output universes
-    for (i = 0; i < this->Universes; i++) {
-		if (data[64 + 19 + 1 + this->Universes + i] != 0x7f && (data[64 + 19 + 1 + this->Universes + i] & (1 << 7))) {
+    for (i = 0; i < MAX_PORTS; i++) {
+		if (data[64 + 19 + 1 + ARTNET_PORTS + i] != 0x7f && (data[64 + 19 + 1 + ARTNET_PORTS + i] & (1 << 7))) {
 			unsigned char t;
 			// Only set if bit 7 is high
-			t = data[64 + 19 + 1 + this->Universes + i] & ~(1 << 7);
+			t = data[64 + 19 + 1 + ARTNET_PORTS + i] & ~(1 << 7);
 			if (this->ArtNetOutputUniverse[i] != t) {
 				this->ArtNetOutputUniverse[i] = t;
-				EEPROM.write(this->eepromaddress + 1 + 18 + 64 + 2 + this->Universes + i, t);
+				EEPROM.write(this->eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS + i, t);
 			}
 		}
     }
     
     // Set subnet
-	if (data[64 + 19 + 1 + this->Universes + this->Universes] != 0x7f && data[64 + 19 + 1 + this->Universes + this->Universes] & (1 << 7)) {
+	if (data[64 + 19 + 1 + ARTNET_PORTS + ARTNET_PORTS] != 0x7f && data[64 + 19 + 1 + ARTNET_PORTS + ARTNET_PORTS] & (1 << 7)) {
 		unsigned char t;
-		t = data[64 + 19 + 1 + this->Universes + this->Universes] & ~(1 << 7);
+		t = data[64 + 19 + 1 + ARTNET_PORTS + ARTNET_PORTS] & ~(1 << 7);
 		if (this->ArtNetSubnet != t) {
 			this->ArtNetSubnet = t;
 			EEPROM.write(this->eepromaddress + 1 + 18 + 64, t);
@@ -321,12 +339,12 @@ void ArtNet::processAddress(byte ip[4], word port, const char *data, word len)
 	}
 	
     // Command - mostly ignored because we don't support any merging
-	switch (data[64 + 19 + 1 + this->Universes + this->Universes + 2]) {
+	switch (data[64 + 19 + 1 + ARTNET_PORTS + ARTNET_PORTS + 2]) {
 		case 0x90:
 		case 0x91:
 		case 0x92: {
 			unsigned char t;
-			t = data[64 + 19 + 1 + this->Universes + this->Universes + 2] & 0x3;
+			t = data[64 + 19 + 1 + ARTNET_PORTS + ARTNET_PORTS + 2] & 0x3;
 			// Reset data on port t
 			break;
 		}
@@ -341,12 +359,12 @@ void ArtNet::processInput(byte ip[4], word port, const char *data, word len)
 	data += sizeof(artnetheader_t) + sizeof(ArtNetMagic);
 	unsigned char i;
 	
-	for (i = 0; i < this->Universes; i++) {
+	for (i = 0; i < MAX_PORTS; i++) {
 		if (this->ArtNetInputEnable[i] != (data[4 + i] & 1)) {
 			// Configure as input
 			if (this->ArtNetInputEnable[i] != (data[4 + i] & 1)) {
 				this->ArtNetInputEnable[i] = (data[4 + i] & 1) ? ARTNET_OUT : ARTNET_IN;
-				EEPROM.write(this->eepromaddress + 1 + 18 + 64 + this->Universes + this->Universes + i, this->ArtNetInputEnable[i]);
+				EEPROM.write(this->eepromaddress + 1 + 18 + 64 + MAX_PORTS + MAX_PORTS + i, this->ArtNetInputEnable[i]);
 			}
 			// Reconfigure port
 			if (data[4 + i] & 1) {
@@ -449,10 +467,10 @@ void ArtNet::processIPProg(byte ip[4], word port, const char *data, word len)
 	// Set eeprom bit
 	EEPROM.write(this->eepromaddress + 1 + 18 + 64 + 1, 1);
 	for (i = 0; i < 4; ++i) {
-	    EEPROM.write(this->eepromaddress + 1 + 18 + 64 + 2 + this->Universes + this->Universes + this->Universes + i, ip[i]);
+	    EEPROM.write(this->eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS + MAX_PORTS + MAX_PORTS + i, ip[i]);
 	}
 	for (i = 0; i < 2; ++i) {
-	    EEPROM.write(this->eepromaddress + 1 + 18 + 64 + 2 + this->Universes + this->Universes + this->Universes + 4 + i, ((byte*)&port)[i]);
+	    EEPROM.write(this->eepromaddress + 1 + 18 + 64 + 2 + MAX_PORTS + MAX_PORTS + MAX_PORTS + 4 + i, ((byte*)&port)[i]);
 	}
 	// Save (and reboot)
 	this->setIP(type, newip, subnet);
@@ -495,7 +513,7 @@ void ArtNet::ProcessPacket(byte ip[4], word port, const char *data, word len)
 			    // Length
 			    length = htons(data[4]);
     
-			    for (i = 0; i < this->Universes; i++) {
+			    for (i = 0; i < this->Ports; i++) {
 			    	if (this->ArtNetInputUniverse[i] == universe && this->ArtNetInputEnable[i] == ARTNET_IN) {
 			    		// Set Data for this output
 			    		// Port i - d[6 + j] (j = 0 to length)
@@ -661,34 +679,49 @@ void ArtNet::SendPoll(unsigned char force)
     }
     
     // Number of DMX ports
-    t16 = htons(this->Universes);
+    t16 = htons(this->Ports);
     memcpy(&this->buffer[length], &t16, 2);
     length += 2;
     
     // Port Configuration
     // Port 1-4
-    for (t16 = 0; t16 < this->Universes; ++t16) {
+    for (t16 = 0; t16 < this->Ports; ++t16) {
         this->buffer[length++] = 0xc0; // Input and output port over DMX512
+    }
+    for (; t16 < 4; ++t16) {
+        this->buffer[length++] = 0;
     }
     
     // Port input status
-    for (t16 = 0; t16 < this->Universes; ++t16) {
+    for (t16 = 0; t16 < this->Ports; ++t16) {
         this->buffer[length++] = ArtNetInputPortStatus[t16];
+    }
+    for (; t16 < 4; ++t16) {
+        this->buffer[length++] = 0;
     }
     
     // Port output status
-    for (t16 = 0; t16 < this->Universes; ++t16) {
+    for (t16 = 0; t16 < this->Ports; ++t16) {
         this->buffer[length++] = ArtNetOutputPortStatus[t16];
+    }
+    for (; t16 < 4; ++t16) {
+        this->buffer[length++] = 0;
     }
     
     // Port input universe
-    for (t16 = 0; t16 < this->Universes; ++t16) {
+    for (t16 = 0; t16 < this->Ports; ++t16) {
         this->buffer[length++] = ArtNetInputUniverse[t16];
+    }
+    for (; t16 < 4; ++t16) {
+        this->buffer[length++] = 0;
     }
     
     // Port output universe
-    for (t16 = 0; t16 < this->Universes; ++t16) {
+    for (t16 = 0; t16 < this->Ports; ++t16) {
         this->buffer[length++] = ArtNetOutputUniverse[t16];
+    }
+    for (; t16 < 4; ++t16) {
+        this->buffer[length++] = 0;
     }
     
     // Video, Macro and Remote followed by three spare and Style (StNode = 0)
@@ -701,6 +734,7 @@ void ArtNet::SendPoll(unsigned char force)
         length += 6;
     }
     
+    /*
     // Bind IP, set to the same as self IP
     memcpy(&this->buffer[length], this->ip, 4);
     length += 4;
@@ -717,6 +751,7 @@ void ArtNet::SendPoll(unsigned char force)
     // Filler
     memset(&this->buffer[length], 0, 26);
     length += 26;
+    */
 
     // Transmit ArtNetPollReply
     this->sendFunc(length, UDP_PORT_ARTNET, destIp, UDP_PORT_ARTNET_REPLY);

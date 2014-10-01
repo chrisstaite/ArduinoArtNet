@@ -22,6 +22,11 @@
 
 #include <Arduino.h>
 
+// The maximum number of ports supported
+#define MAX_PORTS 4
+// The number of ports in a ArtNet packet
+#define ARTNET_PORTS 4
+
 // OEM_HI code taken from nomis52 ArtNet node
 #define OEM_HI 0x04
 // OEM_LO code is nomis52 ArtNet node + 1
@@ -33,10 +38,10 @@
 #define UDP_PORT_ARTNET_REPLY (UDP_PORT_ARTNET + 1)
 
 typedef enum ArtNetPortTypeTag {
+    ARTNET_OFF,
 	ARTNET_IN,
 	ARTNET_OUT
-}
-ArtNetPortType;
+} ArtNetPortType;
 
 typedef enum { PRIMARY = 0, SECONDARY, DHCP, CUSTOM } IPConfiguration;
 
@@ -58,8 +63,7 @@ typedef enum ArtNetStatusTag
 	ARTNET_STATUS_DMX_OUTPUT_SHORT = 0x000d,
 	ARTNET_STATUS_FIRMWARE_FAIL = 0x000e,
 	ARTNET_STATIS_USER_FAIL = 0x000f
-}
-ArtNetStatus_t;
+} ArtNetStatus_t;
 
 class ArtNet
 {
@@ -82,17 +86,19 @@ class ArtNet
     unsigned int ArtNetFailCounter;
     ArtNetStatus_t ArtNetStatus;
     char *ArtNetStatusString;
-    unsigned char Universes;
-    unsigned char *ArtNetInputPortStatus;
-    unsigned char *ArtNetOutputPortStatus;
-    unsigned char *ArtNetInputUniverse;
-    unsigned char *ArtNetOutputUniverse;
-    ArtNetPortType *ArtNetInputEnable;
+    unsigned char Ports;
+    unsigned char ArtNetInputPortStatus[MAX_PORTS];
+    unsigned char ArtNetOutputPortStatus[MAX_PORTS];
+    unsigned char ArtNetInputUniverse[MAX_PORTS];
+    unsigned char ArtNetOutputUniverse[MAX_PORTS];
+    ArtNetPortType ArtNetInputEnable[MAX_PORTS];
     unsigned char ArtNetSubnet;
 
   public:
-    ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(size_t, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char universes);
+    ArtNet(byte *mac, byte eepromaddress, byte *buffer, word buflen, void (*setIP)(IPConfiguration, const char*, const char*), void (*sendFunc)(size_t, word, byte*, word), void (*callback)(unsigned short, const char *, unsigned short), unsigned char ports);
     void Configure(byte dhcp, byte *ip);
+    ArtNetPortType PortType(unsigned char port);
+    void PortType(unsigned char port, ArtNetPortType type);
     void ProcessPacket(byte ip[4], word port, const char *data, word len);
     void SendPoll(unsigned char force);
     void GetLongName(char *longName);
