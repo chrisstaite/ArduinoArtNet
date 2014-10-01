@@ -734,7 +734,6 @@ void ArtNet::SendPoll(unsigned char force)
         length += 6;
     }
     
-    /*
     // Bind IP, set to the same as self IP
     memcpy(&this->buffer[length], this->ip, 4);
     length += 4;
@@ -751,7 +750,6 @@ void ArtNet::SendPoll(unsigned char force)
     // Filler
     memset(&this->buffer[length], 0, 26);
     length += 26;
-    */
 
     // Transmit ArtNetPollReply
     this->sendFunc(length, UDP_PORT_ARTNET, destIp, UDP_PORT_ARTNET_REPLY);
